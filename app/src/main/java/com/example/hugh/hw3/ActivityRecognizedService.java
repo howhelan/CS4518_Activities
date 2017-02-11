@@ -3,14 +3,21 @@ package com.example.hugh.hw3;
 import android.app.IntentService;
 import android.content.Intent;
 import android.content.Context;
+import android.content.ContentValues;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.NotificationManagerCompat;
 import android.util.Log;
+import android.view.View;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
+import java.util.Date;
+
 
 import com.google.android.gms.location.ActivityRecognitionResult;
 import com.google.android.gms.location.DetectedActivity;
 
 import java.util.List;
+import java.util.Date;
 
 /**
  * An {@link IntentService} subclass for handling asynchronous task requests in
@@ -21,6 +28,16 @@ import java.util.List;
  */
 public class ActivityRecognizedService extends IntentService {
 
+    public static final String ACTION_MyIntentService = "com.example.androidintentservice.RESPONSE";
+    public static final String ACTION_MyUpdate = "com.example.androidintentservice.UPDATE";
+    public static final String EXTRA_KEY_IN = "EXTRA_IN";
+    public static final String EXTRA_KEY_OUT = "EXTRA_OUT";
+    public static final String EXTRA_KEY_UPDATE = "EXTRA_UPDATE";
+    String msgFromActivity;
+    String extraOut;
+
+    private DBHelper DbHelper;
+    private SQLiteDatabase db;
 
     public ActivityRecognizedService() {
         super("ActivityRecognizedService");
@@ -35,12 +52,21 @@ public class ActivityRecognizedService extends IntentService {
         if(ActivityRecognitionResult.hasResult(intent)) {
             ActivityRecognitionResult result = ActivityRecognitionResult.extractResult(intent);
             handleDetectedActivities( result.getProbableActivities() );
+            System.out.println("checkpoint");
         }
     }
 
     private void handleDetectedActivities(List<DetectedActivity> probableActivities) {
         int maxConfidence = 0;
-        int maxActivity = 0;
+        int maxActivity = probableActivities.get(0).getConfidence();
+
+        DBHelper DbHelper = new DBHelper(getApplicationContext());
+        db = DbHelper.getWritableDatabase();
+
+
+
+        System.out.println("checkpoint");
+        //((MainActivity) mcontext).updateText("bla bla bla");
 
         for( DetectedActivity activity : probableActivities ){
             int confidence = activity.getConfidence();
@@ -50,27 +76,19 @@ public class ActivityRecognizedService extends IntentService {
             }
         }
 
+        if(maxConfidence > 75) {
+            // Create a new map of values, where column names are the keys
+            long timeStamp = (new Date().getTime()) / 1000;
 
-        switch( maxActivity ){
-            case 0: //IN_VEHICLE
-                break;
-            case 1: //ON_BICYCLE
-                break;
-            case 2: //ON_FOOT
-                break;
-            case 3: //RUNNING
-                break;
-            case 4: //STILL
-                break;
-            case 5: //TILTING
-                break;
-            case 6: //UNKNOWN
-                break;
-            case 7: //WALKING
-                break;
-            default:
-                break;
+            ContentValues values = new ContentValues();
+            values.put(ActivitySchema.Entry.ACTIVITY, maxActivity);
+            values.put(ActivitySchema.Entry.TIME, timeStamp);
+            values.put(ActivitySchema.Entry.CONFIDENCE, maxConfidence);
 
+            // Insert the new row, returning the primary key value of the new row
+            long newRowId = db.insert(ActivitySchema.Entry.TABLE_NAME, null, values);
         }
+
+
     }
 }

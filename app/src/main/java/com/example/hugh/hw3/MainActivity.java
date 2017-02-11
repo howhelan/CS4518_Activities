@@ -19,6 +19,8 @@ import java.util.Timer;
 import java.util.TimerTask;
 import android.widget.TextView;
 import android.os.Handler;
+import android.widget.ImageView;
+import android.media.MediaPlayer;
 
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -29,7 +31,23 @@ import com.google.android.gms.location.ActivityRecognition;
 import com.google.android.gms.location.ActivityRecognitionApi;
 import com.google.android.gms.wallet.wobs.TimeInterval;
 
-public class MainActivity extends AppCompatActivity implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener{
+import android.content.pm.PackageManager;
+import android.support.v4.content.ContextCompat;
+import android.location.Location;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.CameraPosition;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.location.LocationListener;
+
+public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener{
 
     public static final String EXTRA_KEY_IN = "EXTRA_IN";
     public static final String EXTRA_KEY_OUT = "EXTRA_OUT";
@@ -40,6 +58,16 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
 
     public GoogleApiClient mApiClient;
 
+    GoogleMap mMap;
+    LocationRequest mLocationRequest;
+    Marker currLocation;
+    LatLng latLng;
+
+    public TextView myText;
+    public ImageView myImage;
+
+    public MediaPlayer mediaPlayer;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -49,7 +77,41 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
                 .addApi(ActivityRecognition.API)
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
+                .addApi(LocationServices.API)
+                .addApi(ActivityRecognition.API)
                 .build();
+
+        mApiClient.connect();
+
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
+                .findFragmentById(R.id.map);
+        mapFragment.getMapAsync(this);
+
+        myText = (TextView) findViewById(R.id.activityText);
+        myImage = (ImageView) findViewById(R.id.activityImage);
+        mediaPlayer = MediaPlayer.create(this, R.raw.beat_02);
+        mediaPlayer.setLooping(true);
+    }
+
+    @Override
+    public void onMapReady(GoogleMap googleMap) {
+        mMap = googleMap;
+
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            mMap.setMyLocationEnabled(true);
+        } else {
+            // Show rationale and request permission.
+        }
+
+        if (mApiClient == null) {
+            mApiClient = new GoogleApiClient.Builder(this)
+                    .addConnectionCallbacks(this)
+                    .addOnConnectionFailedListener(this)
+                    .addApi(LocationServices.API)
+                    .addApi(ActivityRecognition.API)
+                    .build();
+        }
 
         mApiClient.connect();
     }
@@ -62,6 +124,30 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
 
         mHandler = new Handler();
         startRepeatingTask();
+
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            mMap.setMyLocationEnabled(true);
+        } else {
+            // Show rationale and request permission.
+        }
+
+        Location mLastLocation = LocationServices.FusedLocationApi.getLastLocation(mApiClient);
+        if (mLastLocation != null) {
+            latLng = new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude());
+            MarkerOptions markerOptions = new MarkerOptions();
+            markerOptions.position(latLng);
+            markerOptions.title("Current Position");
+            markerOptions.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA));
+            currLocation = mMap.addMarker(markerOptions);
+        }
+
+        mLocationRequest = new LocationRequest();
+        mLocationRequest.setInterval(5000);
+        mLocationRequest.setFastestInterval(3000);
+        mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+
+        LocationServices.FusedLocationApi.requestLocationUpdates(mApiClient, mLocationRequest, this);
     }
 
     @Override
@@ -74,7 +160,26 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
 
     }
 
+    public void onLocationChanged(Location location) {
+        if (currLocation != null) {
+            currLocation.remove();
+        }
 
+        latLng = new LatLng(location.getLatitude(), location.getLongitude());
+        MarkerOptions markerOptions = new MarkerOptions();
+        markerOptions.position(latLng);
+        markerOptions.title("Current Position");
+        markerOptions.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA));
+        currLocation = mMap.addMarker(markerOptions);
+
+        //zoom to current position:
+        CameraPosition cameraPosition = new CameraPosition.Builder()
+                .target(latLng).zoom(14).build();
+
+        mMap.animateCamera(CameraUpdateFactory
+                .newCameraPosition(cameraPosition));
+
+    }
 
     Runnable mStatusChecker = new Runnable() {
         @Override
@@ -113,32 +218,40 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.C
             c.moveToFirst();
 
             String activity = c.getString(0);
-            TextView t = (TextView)findViewById(R.id.activityText);
+            //TextView t = (TextView)findViewById(R.id.activityText);
+
+            mediaPlayer.start();
 
             switch(activity){
                 case "0":
-                    t.setText("0");
+                    myText.setText("You are driving");
+                    myImage.setImageResource(R.mipmap.in_vehicle);
                     break;
                 case "1":
-                    t.setText("1");
+                    //t.setText("1");
                     break;
                 case "2":
-                    t.setText("2");
+                    myText.setText("You are walking");
+                    myImage.setImageResource(R.mipmap.walking);
                     break;
                 case "3":
-                    t.setText("3");
+                    myText.setText("You are running");
+                    myImage.setImageResource(R.mipmap.running);
                     break;
                 case "4":
-                    t.setText("4");
+                    //t.setText("4");
                     break;
                 case "5":
-                    t.setText("5");
+                    myText.setText("You are not moving");
+                    myImage.setImageResource(R.mipmap.still);
+                    mediaPlayer.stop();
                     break;
                 case "6":
-                    t.setText("6");
+                    //t.setText("6");
                     break;
                 case "7":
-                    t.setText("7");
+                    myText.setText("You are walking");
+                    myImage.setImageResource(R.mipmap.walking);
                     break;
 
 
